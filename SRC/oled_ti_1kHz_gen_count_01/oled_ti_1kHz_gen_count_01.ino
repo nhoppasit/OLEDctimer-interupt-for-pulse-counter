@@ -1,4 +1,4 @@
-#define TRACE_ADC 1
+#define _TRACE_ 0
 
 #include <SPI.h>
 #include <Wire.h>
@@ -32,11 +32,17 @@ int Adc0Value = 0;
 float Voltage0 = 0;
 float V0Readings[MAX_ADC_READINGS]; // the Adc0Readings from the analog input
 float V0Total = 0;                  // the running Adc0Total
+float V18650 = 0;
+float BatteryPercent = 0;
+
+const int OLED_TIME = 50; /*milliseconds*/
+unsigned long t0Oled = 0;
 
 void setup()
 {
+#if _TRACE_
   Serial.begin(9600);
-
+#endif
   pinMode(Adc0Pin, INPUT_ANALOG);
 
   pinMode(PB12, INPUT);
@@ -63,7 +69,7 @@ void setup()
   digitalWrite(PC13, 1);
   digitalWrite(PB1, 0);
   digitalWrite(PB8, 0);
-  digitalWrite(PB8, 9);
+  digitalWrite(PB9, 0);
 
   // by default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // initialize with the I2C addr 0x3D (for the 128x64)
@@ -75,17 +81,17 @@ void setup()
   // draw multiple rectangles
   testfillrect();
   display.display();
-  delay(2000);
+  delay(1000);
   display.clearDisplay();
   display.display();
 
   // invert the display
-  for (int i = 0; i < 0; i++)
+  for (int i = 0; i < 3; i++)
   {
     display.invertDisplay(true);
-    delay(500);
+    delay(150);
     display.invertDisplay(false);
-    delay(500);
+    delay(250);
   }
   display.clearDisplay();
   display.display();
@@ -103,6 +109,33 @@ void loop()
 {
   ReadAdc(true);
   OutputFlag = digitalRead(PB12) == LOW;
+  if (digitalRead(PB13) == LOW)
+    OnCount = 0;
+  oledShow();
+}
+
+void oledShow()
+{
+  if (OLED_TIME < (millis() - t0Oled))
+  {
+    // text display tests
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("BAT: ");
+    display.print(BatteryPercent, 0);
+    if (0 <= AdcReadIndex && AdcReadIndex < MAX_ADC_READINGS / 2)
+      display.println("% *");
+    else
+      display.println("%");
+    display.println("PULSE:");
+    display.setCursor(0, 40);
+    display.setTextSize(3);
+    display.print((float)OnCount, 0);
+    display.display();
+    t0Oled = millis();
+  }
 }
 
 /*
@@ -125,12 +158,17 @@ void ReadAdc(bool flag)
       V0Readings[AdcReadIndex] = V0;
       V0Total = V0Total + V0Readings[AdcReadIndex];
       Voltage0 = V0Total / (float)MAX_ADC_READINGS;
-      float V18650 = Voltage0 * 2.0;
+      V18650 = Voltage0 * 2.0;
+      BatteryPercent = (float)((int)((V18650 - 3.18) * 100.0));
+      if (100.0 < BatteryPercent)
+        BatteryPercent = 100.0;
+      if (BatteryPercent < 0.0)
+        BatteryPercent = 0.0;
       AdcReadIndex = AdcReadIndex + 1;
       if (MAX_ADC_READINGS <= AdcReadIndex)
       {
         AdcReadIndex = 0;
-#if TRACE_ADC
+#if _TRACE_
         Serial.print("Pulse Count = ");
         Serial.print(OnCount);
         Serial.print(" | A0 = ");
@@ -141,6 +179,9 @@ void ReadAdc(bool flag)
         Serial.print(Voltage0, 3);
         Serial.print(", 18650 LiON Battery (Volt) = ");
         Serial.print(V18650, 3);
+        Serial.print(", Percent = ");
+        Serial.print(BatteryPercent);
+        Serial.print("%");
         Serial.println();
 #endif
       }
@@ -171,7 +212,6 @@ void handler_led(void)
   }
   else
   {
-    OnCount = 0;
     digitalWrite(PC13, 1);
     digitalWrite(PB1, 0);
     digitalWrite(PB8, 0);
