@@ -1,6 +1,5 @@
 #define TRACE_ADC 1
 
-#include "stm32f1xx_ll_adc.h"
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -8,6 +7,7 @@
 
 #define LED_RATE 500 // in microseconds; should give 1.0kHz toggles
 bool ticktok = false;
+bool OutputFlag = false;
 
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
@@ -24,6 +24,7 @@ Adafruit_SSD1306 display(OLED_RESET);
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
 
+/* Adc moving average */
 unsigned long t0Adc = 0;
 bool Adc_FLAG = true;    //
 const int ADC_TIME = 10; /*ms*/
@@ -41,6 +42,8 @@ void setup()
   Serial.begin(9600);
 
   pinMode(Adc0Pin, INPUT_ANALOG);
+  pinMode(PB12, INPUT);
+  pinMode(PB13, INPUT);
   pinMode(PC13, OUTPUT);
   pinMode(PB1, OUTPUT);
   pinMode(PB8, OUTPUT);
@@ -98,6 +101,7 @@ void setup()
 void loop()
 {
   ReadAdc(true);
+  OutputFlag = digitalRead(PB12) == LOW;
 }
 
 /*
@@ -115,12 +119,12 @@ void ReadAdc(bool flag)
       VREF = 3.3;
 
       Adc0Value = analogRead(Adc0Pin);
-      float V0 = VREF * (float)Adc0Value / 4095.0;
+      float V0 = VREF * (float)Adc0Value / 4095.0 + 0.039;
       V0Total = V0Total - V0Readings[AdcReadIndex];
       V0Readings[AdcReadIndex] = V0;
       V0Total = V0Total + V0Readings[AdcReadIndex];
       Voltage0 = V0Total / (float)MAX_ADC_READINGS;
-
+      float V18650 = Voltage0 * 2.0;
       AdcReadIndex = AdcReadIndex + 1;
       if (MAX_ADC_READINGS <= AdcReadIndex)
       {
@@ -132,6 +136,8 @@ void ReadAdc(bool flag)
         Serial.print(VREF, 3);
         Serial.print(", V0 (Volt) = ");
         Serial.print(Voltage0, 3);
+        Serial.print(", 18650 LiON Battery (Volt) = ");
+        Serial.print(V18650, 3);
         Serial.println();
 #endif
       }
@@ -142,19 +148,22 @@ void ReadAdc(bool flag)
 
 void handler_led(void)
 {
-  if (ticktok)
+  if (OutputFlag)
   {
-    digitalWrite(PC13, 1);
-    digitalWrite(PB1, 1);
-    digitalWrite(PB8, 1);
+    if (ticktok)
+    {
+      digitalWrite(PC13, 1);
+      digitalWrite(PB1, 1);
+      digitalWrite(PB8, 1);
+    }
+    else
+    {
+      digitalWrite(PC13, 0);
+      digitalWrite(PB1, 0);
+      digitalWrite(PB8, 0);
+    }
+    ticktok = !ticktok;
   }
-  else
-  {
-    digitalWrite(PC13, 0);
-    digitalWrite(PB1, 0);
-    digitalWrite(PB8, 0);
-  }
-  ticktok = !ticktok;
 }
 
 void testdrawchar(void)
