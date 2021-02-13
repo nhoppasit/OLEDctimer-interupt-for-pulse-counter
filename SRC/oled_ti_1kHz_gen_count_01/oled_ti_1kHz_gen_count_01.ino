@@ -1,9 +1,13 @@
+#define TRACE_ADC 1
+
+#include "stm32f1xx_ll_adc.h"
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306_STM32.h>
 
 #define LED_RATE 500 // in microseconds; should give 1.0kHz toggles
+bool ticktok = false;
 
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
@@ -20,11 +24,23 @@ Adafruit_SSD1306 display(OLED_RESET);
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
 
+unsigned long t0Adc = 0;
+bool Adc_FLAG = true;    //
+const int ADC_TIME = 10; /*ms*/
+const int MAX_ADC_READINGS = 100;
+float VREF = 0;
+int AdcReadIndex = 0; // the index of the current reading
+#define Adc0Pin PA6
+int Adc0Value = 0;
+float Voltage0 = 0;
+float V0Readings[MAX_ADC_READINGS]; // the Adc0Readings from the analog input
+float V0Total = 0;                  // the running Adc0Total
+
 void setup()
 {
   Serial.begin(9600);
 
-  pinMode(PA0, INPUT_ANALOG);
+  pinMode(Adc0Pin, INPUT_ANALOG);
   pinMode(PC13, OUTPUT);
   pinMode(PB1, OUTPUT);
   pinMode(PB8, OUTPUT);
@@ -81,9 +97,49 @@ void setup()
 
 void loop()
 {
+  ReadAdc(true);
 }
 
-bool ticktok = false;
+/*
+  -----------------------------------------------------------------------------
+  Analog: A0, A1
+  -----------------------------------------------------------------------------
+*/
+void ReadAdc(bool flag)
+{
+  if (flag)
+  {
+    if (ADC_TIME < (millis() - t0Adc))
+    {
+      // VREF = 1.2 * 4095.0 / (float)adc_read(ADC1, 17);
+      VREF = 3.3;
+
+      Adc0Value = analogRead(Adc0Pin);
+      float V0 = VREF * (float)Adc0Value / 4095.0;
+      V0Total = V0Total - V0Readings[AdcReadIndex];
+      V0Readings[AdcReadIndex] = V0;
+      V0Total = V0Total + V0Readings[AdcReadIndex];
+      Voltage0 = V0Total / (float)MAX_ADC_READINGS;
+
+      AdcReadIndex = AdcReadIndex + 1;
+      if (MAX_ADC_READINGS <= AdcReadIndex)
+      {
+        AdcReadIndex = 0;
+#if TRACE_ADC
+        Serial.print("A0 = ");
+        Serial.print(Adc0Value);
+        Serial.print(", Vref = ");
+        Serial.print(VREF, 3);
+        Serial.print(", V0 (Volt) = ");
+        Serial.print(Voltage0, 3);
+        Serial.println();
+#endif
+      }
+      t0Adc = millis();
+    }
+  }
+}
+
 void handler_led(void)
 {
   if (ticktok)
