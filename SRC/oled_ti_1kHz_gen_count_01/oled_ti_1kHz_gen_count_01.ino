@@ -125,14 +125,13 @@ void oledShow()
     display.setCursor(0, 0);
     display.print("BAT: ");
     display.print(BatteryPercent, 0);
-    if (0 <= AdcReadIndex && AdcReadIndex < MAX_ADC_READINGS / 2)
-      display.println("% *");
-    else
-      display.println("%");
+    display.println("%");
     display.println("PULSE:");
     display.setCursor(0, 40);
     display.setTextSize(3);
     display.print((float)OnCount, 0);
+    if (0 <= AdcReadIndex && AdcReadIndex < MAX_ADC_READINGS / 2)
+      display.fillCircle(display.width()-6, 5, 6, WHITE);
     display.display();
     t0Oled = millis();
   }
